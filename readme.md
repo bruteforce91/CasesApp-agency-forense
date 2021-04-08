@@ -71,42 +71,42 @@ Vediamo in dettaglio il seguente protocollo per la codifica e decodifica:
 
 1. Fase:Il server fornisce al controller, che gestisce la codifica e la decodifica, le due chiavi dell’utente corrispondente e lo script della tipologia selezionata.
 2. Fase:Il controller, dopo aver ricercato dal database le chiavi dell’utente loggato e lo script, effettua la codifica dello script attraverso una funzione ideata in PHP che prende come parametri le chiavi e lo script:private function Encrypt($script, $public_key,$private_key). Questa funzione restituirà un oggetto JSON codificato e successivamente effettua le seguenti operazioni:
-* Otteniamo la lunghezza del vettore di inizializzazione della cifratura (iv) con openssl_cipher_iv_length()
-* Generiamo una stringa di byte pseudo-casuali, con il numero di byte determinato dalla lunghezza ottenuta nel passo precedente, passandolo come parametro nella funzione openssl_random_pseudo_bytes($length)
-* Generiamo il salt, una sequenza casuale di bit openssl_random_pseudo_bytes(256)
-* Utilizziamo una funzione per ciascun chiave che generi una derivazione della chiave PBKDF2 di una password fornita:hash_pbkdf2('sha512', $public_key, $salt, $iterations, $length)
+    * Otteniamo la lunghezza del vettore di inizializzazione della cifratura (iv) con openssl_cipher_iv_length()
+    * Generiamo una stringa di byte pseudo-casuali, con il numero di byte determinato dalla lunghezza ottenuta nel passo precedente, passandolo come parametro nella funzione   openssl_random_pseudo_bytes($length)
+    * Generiamo il salt, una sequenza casuale di bit openssl_random_pseudo_bytes(256)
+    * Utilizziamo una funzione per ciascun chiave che generi una derivazione della chiave PBKDF2 di una password fornita:hash_pbkdf2('sha512', $public_key, $salt, $iterations, $length)
  hash_pbkdf2('sha512', $private_key, $salt, $iterations, $length)
-* ‘PBKDF2’ è un algoritmo di estensione della chiave ed esegue l'hash delle password in modo intensivo dal punto di vista computazionale, in modo che gli attacchi di dizionario e forza bruta siano meno efficaci.
-* ‘sha512’ algoritmo di hashing scelto
-* ‘key’ da utilizzare per la derivazione.
-* ‘salt’ da utilizzare per la derivazione. Un salt fornisce un ampio set di chiavi per ogni password, e un conteggio di iterazioni aumenta il costo di produzione delle chiavi da una password, aumentando così anche la difficoltà dell'attacco.
-* ‘iterations’ - Il numero di iterazioni interne da eseguire per la derivazione
-* ‘length’ - La lunghezza della stringa di output.
+    * ‘PBKDF2’ è un algoritmo di estensione della chiave ed esegue l'hash delle password in modo intensivo dal punto di vista computazionale, in modo che gli attacchi di dizionario e forza bruta siano meno efficaci.
+    * ‘sha512’ algoritmo di hashing scelto
+    * ‘key’ da utilizzare per la derivazione.
+    * ‘salt’ da utilizzare per la derivazione. Un salt fornisce un ampio set di chiavi per ogni password, e un conteggio di iterazioni aumenta il costo di produzione delle chiavi da una password, aumentando così anche la difficoltà dell'attacco.
+    * ‘iterations’ - Il numero di iterazioni interne da eseguire per la derivazione
+    * ‘length’ - La lunghezza della stringa di output.
 Infine utilizziamo la funzione che cripta i dati con il metodo e le chiave fornite, restituendo una stringa codificata raw:openssl_encrypt($script,"AES-256-CBC",hex2bin($hashKey_private), OPENSSL_RAW_DATA, $iv);
-* ‘Script’ ovvero i dati del messaggio in chiaro da crittografare
-* ‘AES-256-CBC’- Il metodo di cifratura.
-* ‘hex2bin’-Decodifica una stringa binaria codificata esadecimalmente.
-* ‘OPENSSL_RAW_DATA’ è una disgiunzione bit a bit 
-* ‘iv’- Un vettore di inizializzazione non NULL
-* Return dell’oggetto json_encode() con tutte le codifiche effettuate.
+    * ‘Script’ ovvero i dati del messaggio in chiaro da crittografare
+    * ‘AES-256-CBC’- Il metodo di cifratura.
+    * ‘hex2bin’-Decodifica una stringa binaria codificata esadecimalmente.
+    * ‘OPENSSL_RAW_DATA’ è una disgiunzione bit a bit 
+    * ‘iv’- Un vettore di inizializzazione non NULL
+    * Return dell’oggetto json_encode() con tutte le codifiche effettuate.
 3. Fase:
 Il controller carica la pagina web(view)dell’utente loggato passando l’oggetto ritornato dalla funzione di codifica. Per effettuare la decodifica all’utente 
 verrà fornita la chiave pubblica, mentre la chiave privata verrà caricata attraverso un cookie9 che si autoeliminerà non appena verrà effettuato il logout.  
 
 La decodifica è una funzione scritta in JavaScript:decrypt(script_criptato, public_key,private_key)
 Questa funzione restituirà lo script decodificato se le chiavi corrispondono a quelle utilizzate per la codifica. Vediamo in dettaglio le operazioni svolte dalla funzione “decrypt” JSON.parse(CryptoJS.enc.Utf8.stringify(CryptoJS.enc.Base64.parse(script_criptato)));
-* JSON.parse()- converte i dati inviati dal server in un oggetto JavaScript
-* CryptoJS10.enc.Utf8.stringify() - Inverte l'array di parole in una stringa leggibile
-* CryptoJS.enc.Base64.parse - codifica lo script in base64.CryptoJS.enc.Hex.parse(json.salt)
-* codifica il salt presente nell’oggetto json in esadecimale.CryptoJS.enc.Hex.parse(json.iv)
-* codifica la lunghezza presente nell’oggetto json in esadecimale var encrypted = json.ciphertext
-* assegniamo alla variabile encrypted il testo che è stato crittografato. Hash_key_public=CryptoJS.PBKDF2(public_key,salt,{'hasher':CryptoJS.algo.SHA512, 'keySize': (encryptMethodL/8), 'iterations': iterations});
-* Creiamo una funzione hash per la chiave pubblica attraverso una funzione di derivazione della chiave pubblica.
-* CryptoJS.algo.SHA512 è un hashing progressivo con funzione Hash SHA512 che opera su parole a 64 bit.
-* Creiamo una funzione hash per la chiave privata attraverso una funzione di derivazione della chiave pubblica.Hash_key_private=CryptoJS.PBKDF2(privatec_key, salt{'hasher':CryptoJS.algo.SHA512, 'keySize': (encryptMethodL/8), 'iterations': iterations});”
-* Successivamente svolgiamo le due decodifiche: la prima basata su hash_key_public, e la seconda, quella finale, basata su hash_key_private passando come parametro il valore ottenuto dalla prima decodifica:
-var public_decrypted_private_encrypted = CryptoJS.AES.decrypt(encrypted, public_hashKey, {'mode': CryptoJS.mode.CBC, 'iv': iv}).toString(CryptoJS.enc.Utf8);
-var final_decrypted = CryptoJS.AES.decrypt(public_decrypted_private_encrypted, private_hashKey, {'mode': CryptoJS.mode.CBC, 'iv': iv});52
+    * JSON.parse()- converte i dati inviati dal server in un oggetto JavaScript
+    * CryptoJS10.enc.Utf8.stringify() - Inverte l'array di parole in una stringa leggibile
+    * CryptoJS.enc.Base64.parse - codifica lo script in base64.CryptoJS.enc.Hex.parse(json.salt)
+    * codifica il salt presente nell’oggetto json in esadecimale.CryptoJS.enc.Hex.parse(json.iv)
+    * codifica la lunghezza presente nell’oggetto json in esadecimale var encrypted = json.ciphertext
+    * assegniamo alla variabile encrypted il testo che è stato crittografato. Hash_key_public=CryptoJS.PBKDF2(public_key,salt,{'hasher':CryptoJS.algo.SHA512, 'keySize': (encryptMethodL/8), 'iterations': iterations});
+    * Creiamo una funzione hash per la chiave pubblica attraverso una funzione di derivazione della chiave pubblica.
+    * CryptoJS.algo.SHA512 è un hashing progressivo con funzione Hash SHA512 che opera su parole a 64 bit.
+    * Creiamo una funzione hash per la chiave privata attraverso una funzione di derivazione della chiave pubblica.Hash_key_private=CryptoJS.PBKDF2(privatec_key, salt{'hasher':CryptoJS.algo.SHA512, 'keySize': (encryptMethodL/8), 'iterations': iterations});”
+    * Successivamente svolgiamo le due decodifiche: la prima basata su hash_key_public, e la seconda, quella finale, basata su hash_key_private passando come parametro il valore       ottenuto dalla prima decodifica:
+    var public_decrypted_private_encrypted = CryptoJS.AES.decrypt(encrypted, public_hashKey, {'mode': CryptoJS.mode.CBC, 'iv': iv}).toString(CryptoJS.enc.Utf8);
+    var final_decrypted = CryptoJS.AES.decrypt(public_decrypted_private_encrypted, private_hashKey, {'mode': CryptoJS.mode.CBC, 'iv': iv});52
 
 Il valore ottenuto dalla decodifica “final_decrypted” sarà convertito in stringa per l’effettiva decodifca.final_decrypted.toString(CryptoJS.enc.Utf8)
 
